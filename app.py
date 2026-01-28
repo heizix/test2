@@ -41,6 +41,8 @@ with app.app_context():
     db.create_all()
     print("数据库表已创建")
 
+
+
 #1. 评分函数，未进行修改
 def calculate_scores(answers: dict) -> dict:
     annual_invoice = float(answers.get("annual_invoice", 0))
@@ -204,6 +206,80 @@ def report_preview():
     except Exception as e:
         print(f"服务器内部错误: {str(e)}")
         return jsonify({"error": "服务器内部错误，请稍后重试"}), 500
+
+"""
+API 1：POST /api/submissions（保存answers）
+入参为answers JSON，保存到Submission表，返回submission_id和结果
+api 测试：curl -X POST http://localhost:5000/api/submissions -H "Content-Type: application/json" -d "{\"answers\":{\"annual_invoice\":300,\"annual_flow\":600,\"has_mortgage\":false,\"overdue_level\":\"none\"}}"
+"""
+@app.route('/api/submissions', methods=['POST'])
+def create_submission_in():
+    # 先跳过参数校验和错误码，直接保存
+    answer_json = request.get_json()
+    #先跳过参数校验，直接保存
+
+    submission = Submission(answers=json.dumps(answer_json, ensure_ascii=False))
+
+    db.session.add(submission)
+    db.session.commit()
+    db.session.query(Submission).all()
+    return jsonify({"submission_id": submission.id, "message": "提交成功"}), 200
+
+
+
+"""
+API 2：POST /api/reports/generate?submission_id=xxx（生成报告并保存）
+入参为submission_id，读取对应Submission的answers，生成报告并保存到Report表，返回report_json
+直接将原来的代码cv下来了，这段代码后续可以另写一个函数调用
+api测试：curl -X POST "http://localhost:5000/api/reports/generate?submission_id=1"
+"""
+@app.route('/api/reports/generate', methods=['POST'])
+def get_report():
+
+
+    submission_id = request.args.get('submission_id')
+    if not submission_id:
+        return jsonify({"error": "submission_id参数缺失"}), 400
+    submission = Submission.query.get(submission_id)
+    if not submission:
+        return jsonify({"error": "找不到对应的Submission"}), 404
+    answers = json.loads(submission.answers)
+    scores = calculate_scores(answers)
+    products_matched = match_products(scores, products)
+    loan_range = calc_loan_range(scores)
+    plan = get_reform_plans(scores)
+    products_need = []
+    for p in products_matched:
+        products_need.append({
+            "name": p["name"],
+            "type": p["type"],
+            "max_amount": p["max_amount"],
+            "interest_rate": f"{p['interest_rate']['min']}%-{p['interest_rate']['max']}%"
+        })
+    report = {
+        "scores": scores,
+        "current_loan_range": loan_range,
+        "recommended_products": products_need,
+        "reform_plans": plan
+    }
+    report_json = json.dumps(report, ensure_ascii=False)
+    report_record = Report(submission_id=submission.id, report_json=report_json)
+    db.session.add(report_record)
+    db.session.commit()
+    return jsonify({"report_json": report}), 200
+
+"""
+API 3：GET /api/reports/{id}（查询报告详情）
+入参为report id，返回对应的report_json
+api测试：curl -X GET http://localhost:5000/api/reports/1
+"""
+@app.route('/api/reports/<int:report_id>', methods=['GET'])
+def get_report_detail(report_id):
+    report = Report.query.get(report_id)
+
+    report_data = json.loads(report.report_json)
+    response_json = json.dumps(report_data, ensure_ascii=False, indent=2)
+    return app.response_class(response_json, content_type='application/json'), 200
 
 
 if __name__ == '__main__':
