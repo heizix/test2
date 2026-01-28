@@ -1,6 +1,9 @@
 from flask import Flask, request, jsonify
 from pydantic import BaseModel, ValidationError, field_validator
 import json
+
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
 app = Flask(__name__)
 
 
@@ -13,6 +16,30 @@ except Exception as e:
     print(f"加载产品数据失败: {str(e)}")
     products = []
 
+#sqlite数据库配置
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+
+#Submission表
+class Submission(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    answers = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    def __repr__(self):
+        return f"<Submission {self.id}>"
+
+class Report(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    submission_id = db.Column(db.Integer, db.ForeignKey('submission.id'), nullable=False)
+    report_json = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    def __repr__(self):
+        return f"<Report {self.id}>"
+
+with app.app_context():
+    db.create_all()
+    print("数据库表已创建")
 
 #1. 评分函数，未进行修改
 def calculate_scores(answers: dict) -> dict:
