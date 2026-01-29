@@ -40,7 +40,7 @@ curl.exe -X DELETE "http://localhost:5000/api/admin/submissions/1"
 
 
 ```
-
+![本地启动.png](%E6%9C%AC%E5%9C%B0%E5%90%AF%E5%8A%A8.png)
 
 默认访问地址：
 
@@ -55,25 +55,25 @@ http://localhost:5000
 ### 构建镜像
 
 ```bash
-# 1) 构建镜像
+# 构建镜像
 docker build -t backend-test2 .
 
 
-# 3) 重新运行容器（避免同名冲突）
+# 重新运行容器（避免同名冲突）
 docker rm -f backend_test2_run
 
-# 4) 启动（端口映射 + 持久化 DB）
+# 启动（端口映射 + 持久化 DB）
 docker run -d `
   --name backend_test2_run `
   -p 5000:5000 `
   -v ${PWD}\instance:/app/instance `
   backend-test2
 
-# 5) 查看日志确认启动成功
+# 查看日志确认启动成功
 docker logs --tail 50 backend_test2_run
-# 6) 停止容器
+# 停止容器
 docker stop backend_test2_run
-# 7) 删除容器
+# 删除容器
 docker rm backend_test2_run
 
 
@@ -104,7 +104,7 @@ curl.exe -X DELETE "http://localhost:5000/api/admin/reports/1"
 
 
 ```
-
+![Docker启动.png](Docker%E5%90%AF%E5%8A%A8.png)
 
 ---
 
@@ -120,24 +120,26 @@ curl.exe -X DELETE "http://localhost:5000/api/admin/reports/1"
 https://test2-production-a399.up.railway.app
 ```
 ```bash
-curl -X POST https://test2-production-a399.up.railway.app/api/submissions -H "Content-Type: application/json" -d "{\"answers\":{\"annual_invoice\":300,\"annual_flow\":600,\"has_mortgage\":false,\"overdue_level\":\"none\"}}"
+curl.exe -X POST https://test2-production-a399.up.railway.app/api/submissions -H "Content-Type: application/json" -d "{\"answers\":{\"annual_invoice\":300,\"annual_flow\":600,\"has_mortgage\":false,\"overdue_level\":\"none\"}}"
 
-curl -X POST "https://test2-production-a399.up.railway.app/api/reports/generate?submission_id=1"
+curl.exe -X POST "https://test2-production-a399.up.railway.app/api/reports/generate?submission_id=1"
 
-curl -X GET "https://test2-production-a399.up.railway.app/api/reports/1"
+curl.exe -X GET "https://test2-production-a399.up.railway.app/api/reports/1"
 
-curl -X GET "https://test2-production-a399.up.railway.app/api/admin/submissions"
+curl.exe -X GET "https://test2-production-a399.up.railway.app/api/admin/submissions"
 
-curl -X GET "https://test2-production-a399.up.railway.app/api/admin/reports"
+curl.exe -X GET "https://test2-production-a399.up.railway.app/api/admin/reports"
 
-curl -X DELETE "https://test2-production-a399.up.railway.app/api/admin/reports/1"
+curl.exe -X DELETE "https://test2-production-a399.up.railway.app/api/admin/reports/1"
 
-curl -X DELETE "https://test2-production-a399.up.railway.app/api/admin/submissions/1"
+curl.exe -X DELETE "https://test2-production-a399.up.railway.app/api/admin/submissions/1"
 
 
 
 ```
-
+线上部署截图：（可能会超时）
+![railway.png](railway.png)
+![railway页面.png](railway%E9%A1%B5%E9%9D%A2.png)
 ---
 
 ## 关键设计说明
