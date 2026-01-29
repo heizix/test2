@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 from pydantic import BaseModel, ValidationError, field_validator
 import json
-
+import os
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 app = Flask(__name__)
@@ -17,12 +17,18 @@ except Exception as e:
     products = []
 
 #sqlite数据库配置
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
+#app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
+
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv(
+    "SQLALCHEMY_DATABASE_URI",
+    "sqlite:///app.db"  # 本地启动时的默认路径
+)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 #Submission表
 class Submission(db.Model):
+    __tablename__ = 'submission'
     id = db.Column(db.Integer, primary_key=True)
     answers = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.now)
@@ -214,17 +220,40 @@ api 测试：curl -X POST http://localhost:5000/api/submissions -H "Content-Type
 """
 @app.route('/api/submissions', methods=['POST'])
 def create_submission_in():
-    # 先跳过参数校验和错误码，直接保存
-    answer_json = request.get_json()
-    #先跳过参数校验，直接保存
 
-    submission = Submission(answers=json.dumps(answer_json, ensure_ascii=False))
+    try:
+        #字段检验
+        if not request.is_json:
+            raise ValueError("请求体必须是JSON格式")
+        answer_json = request.get_json()
 
-    db.session.add(submission)
-    db.session.commit()
-    db.session.query(Submission).all()
-    return jsonify({"submission_id": submission.id, "message": "提交成功"}), 200
+        if "answers" not in answer_json:
+            raise ValueError("请求体必须包含'answers'字段")
+        answers = answer_json["answers"]
 
+        try:
+            validated_answers = AnswersModel(**answers)  # 解包字典并校验
+        except ValidationError as e:
+
+            error_detail = e.errors()[0]
+            error_msg = f"参数校验失败：{error_detail['loc'][0]} - {error_detail['msg']}"
+            raise ValueError(error_msg)
+        validated_answers_dict = validated_answers.model_dump()
+
+        submission = Submission(answers=json.dumps(validated_answers_dict, ensure_ascii=False))
+
+        db.session.add(submission)
+        db.session.commit()
+        db.session.query(Submission).all()
+        return jsonify({"submission_id": submission.id, "message": "提交成功"}), 200
+
+    except ValueError as ve:
+        print(f"参数错误: {str(ve)}")
+        return jsonify({"error": str(ve)}), 400
+
+    except Exception as e:
+        print(f"服务器内部错误: {str(e)}")
+        return jsonify({"error": "服务器内部错误，请稍后重试"}), 500
 
 
 """
@@ -234,39 +263,54 @@ API 2：POST /api/reports/generate?submission_id=xxx（生成报告并保存）
 api测试：curl -X POST "http://localhost:5000/api/reports/generate?submission_id=1"
 """
 @app.route('/api/reports/generate', methods=['POST'])
-def get_report():
+def generate_report():
+    try:
+        submission_id = request.args.get('submission_id')
+        #非空校验和整数校验
+        if not submission_id:
+            raise ValueError("缺少submission_id参数")
+        try:
+            submission_id = int(submission_id)
+        except ValueError:
+            raise ValueError("submission_id必须是整数")
+        print(f"生成报告请求，submission_id: {submission_id}")
 
+        submission = Submission.query.get(submission_id)
+        if not submission:
+            raise ValueError(f"未找到对应的Submission，ID: {submission_id}")
 
-    submission_id = request.args.get('submission_id')
-    if not submission_id:
-        return jsonify({"error": "submission_id参数缺失"}), 400
-    submission = Submission.query.get(submission_id)
-    if not submission:
-        return jsonify({"error": "找不到对应的Submission"}), 404
-    answers = json.loads(submission.answers)
-    scores = calculate_scores(answers)
-    products_matched = match_products(scores, products)
-    loan_range = calc_loan_range(scores)
-    plan = get_reform_plans(scores)
-    products_need = []
-    for p in products_matched:
-        products_need.append({
-            "name": p["name"],
-            "type": p["type"],
-            "max_amount": p["max_amount"],
-            "interest_rate": f"{p['interest_rate']['min']}%-{p['interest_rate']['max']}%"
-        })
-    report = {
-        "scores": scores,
-        "current_loan_range": loan_range,
-        "recommended_products": products_need,
-        "reform_plans": plan
-    }
-    report_json = json.dumps(report, ensure_ascii=False)
-    report_record = Report(submission_id=submission.id, report_json=report_json)
-    db.session.add(report_record)
-    db.session.commit()
-    return jsonify({"report_json": report}), 200
+         # 以下代码直接cv test1的代码
+        answers = json.loads(submission.answers)
+        scores = calculate_scores(answers)
+        products_matched = match_products(scores, products)
+        loan_range = calc_loan_range(scores)
+        plan = get_reform_plans(scores)
+        products_need = []
+        for p in products_matched:
+            products_need.append({
+                "name": p["name"],
+                "type": p["type"],
+                "max_amount": p["max_amount"],
+                "interest_rate": f"{p['interest_rate']['min']}%-{p['interest_rate']['max']}%"
+            })
+        report = {
+            "scores": scores,
+            "current_loan_range": loan_range,
+            "recommended_products": products_need,
+            "reform_plans": plan
+        }
+        report_json = json.dumps(report, ensure_ascii=False)
+        report_record = Report(submission_id=submission.id, report_json=report_json)
+        db.session.add(report_record)
+        db.session.commit()
+        return jsonify({"report_id": report_record.id, "message": "报告生成成功"}), 200
+    except ValueError as ve:
+        print(f"参数错误: {str(ve)}")
+        return jsonify({"error": str(ve)}), 400
+    except Exception as e:
+        print(f"服务器内部错误: {str(e)}")
+        return jsonify({"error": "服务器内部错误，请稍后重试"}), 500
+
 
 """
 API 3：GET /api/reports/{id}（查询报告详情）
@@ -274,13 +318,20 @@ API 3：GET /api/reports/{id}（查询报告详情）
 api测试：curl -X GET http://localhost:5000/api/reports/1
 """
 @app.route('/api/reports/<int:report_id>', methods=['GET'])
-def get_report_detail(report_id):
-    report = Report.query.get(report_id)
+def get_report(report_id):
+    try:
+        report = Report.query.get(report_id)
+        if not report:
+            return jsonify({"error": f"未找到对应的报告，ID: {report_id}"}), 404
 
-    report_data = json.loads(report.report_json)
-    response_json = json.dumps(report_data, ensure_ascii=False, indent=2)
-    return app.response_class(response_json, content_type='application/json'), 200
+        report_data = json.loads(report.report_json)
+        response_json = json.dumps(report_data, ensure_ascii=False, indent=2)
+        return app.response_class(response_json, content_type='application/json'), 200
+    except Exception as e:
+        print(f"服务器内部错误: {str(e)}")
+        return jsonify({"error": "服务器内部错误，请稍后重试"}), 500
 
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000,debug=True)
+    port = int(os.getenv("PORT", 5000))
+    app.run(host="0.0.0.0", port=port,debug=False)
