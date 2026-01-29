@@ -245,6 +245,7 @@ def create_submission_in():
         db.session.add(submission)
         db.session.commit()
         db.session.query(Submission).all()
+        print(f"保存Submission，ID: {submission.id}")
         return jsonify({"submission_id": submission.id, "message": "提交成功"}), 200
 
     except ValueError as ve:
@@ -253,7 +254,7 @@ def create_submission_in():
 
     except Exception as e:
         print(f"服务器内部错误: {str(e)}")
-        return jsonify({"error": "服务器内部错误，请稍后重试"}), 500
+        return jsonify({"error": "服务器内部错误"}), 500
 
 
 """
@@ -309,7 +310,7 @@ def generate_report():
         return jsonify({"error": str(ve)}), 400
     except Exception as e:
         print(f"服务器内部错误: {str(e)}")
-        return jsonify({"error": "服务器内部错误，请稍后重试"}), 500
+        return jsonify({"error": "服务器内部错误"}), 500
 
 
 """
@@ -326,10 +327,87 @@ def get_report(report_id):
 
         report_data = json.loads(report.report_json)
         response_json = json.dumps(report_data, ensure_ascii=False, indent=2)
+        print(f"查询报告，ID: {report_id}")
         return app.response_class(response_json, content_type='application/json'), 200
     except Exception as e:
         print(f"服务器内部错误: {str(e)}")
-        return jsonify({"error": "服务器内部错误，请稍后重试"}), 500
+        return jsonify({"error": "服务器内部错误"}), 500
+
+
+"""
+管理接口实现：
+API 4：GET /api/admin/submissions（查询所有提交记录）
+API 5：GET /api/admin/reports（查询所有报告记录）
+API 6：DELETE /api/admin/submissions/{id}（删除指定提交记录）
+API 7：DELETE /api/admin/reports/{id}（删除指定报告记录）
+api测试：
+curl -X GET http://localhost:5000/api/admin/submissions
+curl -X DELETE http://localhost:5000/api/admin/submissions/1
+curl -X GET http://localhost:5000/api/admin/reports
+curl -X DELETE http://localhost:5000/api/admin/reports/1
+
+"""
+@app.route('/api/admin/submissions', methods=['GET'])
+def get_all_submissions():
+    try:
+        submissions = Submission.query.all()
+        result = []
+        for sub in submissions:
+            answers_data = json.loads(sub.answers)
+            print(answers_data)
+            result.append({
+                "id": sub.id,
+                "answers": answers_data,
+                "created_at": sub.created_at
+            })
+        return jsonify(result), 200
+    except Exception as e:
+        print(f"服务器内部错误: {str(e)}")
+        return jsonify({"error": "服务器内部错误"}), 500
+@app.route('/api/admin/reports', methods=['GET'])
+def get_all_reports():
+    try:
+        reports = Report.query.all()
+        result = []
+        for rep in reports:
+            result.append({
+                "id": rep.id,
+                "submission_id": rep.submission_id,
+                "report_json": json.loads(rep.report_json),
+                "created_at": rep.created_at
+            })
+        return jsonify(result), 200
+    except Exception as e:
+        print(f"服务器内部错误: {str(e)}")
+        return jsonify({"error": "服务器内部错误"}), 500
+@app.route('/api/admin/submissions/<int:submission_id>', methods=['DELETE'])
+def delete_submission(submission_id):
+    try:
+        submission = Submission.query.get(submission_id)
+        if not submission:
+            return jsonify({"error": f"未找到对应的提交记录，ID: {submission_id}"}), 404
+        Report.query.filter_by(submission_id=submission_id).delete()
+
+        db.session.delete(submission)
+        db.session.commit()
+        return jsonify({"message": "提交记录删除成功"}), 200
+    except Exception as e:
+        print(f"服务器内部错误: {str(e)}")
+        return jsonify({"error": "服务器内部错误"}), 500
+@app.route('/api/admin/reports/<int:report_id>', methods=['DELETE'])
+def delete_report(report_id):
+    try:
+        report = Report.query.get(report_id)
+        if not report:
+            return jsonify({"error": f"未找到对应的报告记录，ID: {report_id}"}), 404
+        db.session.delete(report)
+        db.session.commit()
+        return jsonify({"message": "报告记录删除成功"}), 200
+    except Exception as e:
+        print(f"服务器内部错误: {str(e)}")
+        return jsonify({"error": "服务器内部错误"}), 500
+
+
 
 
 if __name__ == '__main__':

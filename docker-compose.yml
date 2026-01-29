@@ -1,0 +1,11 @@
+services:
+  loan-api:
+    build:
+      context: .
+      network: host  # 使用主机网络，减少容器网络隔离导致的访问问题
+    ports:
+      - "5000:5000"
+    restart: on-failure  # 启动失败时重试
+    environment:
+      - PYTHONUNBUFFERED=1  # 实时输出日志
+      - SQLALCHEMY_DATABASE_URI=sqlite:///app.db
