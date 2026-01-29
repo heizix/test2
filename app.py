@@ -5,6 +5,9 @@ import os
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 app = Flask(__name__)
+app.config["JSON_AS_ASCII"] = False
+app.json.ensure_ascii = False
+
 
 
 try:
@@ -254,7 +257,8 @@ def create_submission_in():
 
     except Exception as e:
         print(f"服务器内部错误: {str(e)}")
-        return jsonify({"error": "服务器内部错误"}), 500
+        return jsonify({"error": "服务器内部错误，请稍后重试"}), 500
+
 
 
 """
@@ -310,7 +314,8 @@ def generate_report():
         return jsonify({"error": str(ve)}), 400
     except Exception as e:
         print(f"服务器内部错误: {str(e)}")
-        return jsonify({"error": "服务器内部错误"}), 500
+        return jsonify({"error": "服务器内部错误，请稍后重试"}), 500
+
 
 
 """
@@ -331,6 +336,7 @@ def get_report(report_id):
         return app.response_class(response_json, content_type='application/json'), 200
     except Exception as e:
         print(f"服务器内部错误: {str(e)}")
+        return jsonify({"error": "服务器内部错误，请稍后重试"}), 500
         return jsonify({"error": "服务器内部错误"}), 500
 
 
